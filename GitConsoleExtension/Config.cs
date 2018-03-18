@@ -31,6 +31,51 @@ namespace GitConsoleExtension
             }
         }
 
+        /// <summary>
+        /// Tries to extract the mintty path from the PATH variable and the standard paths
+        /// </summary>
+        /// <returns></returns>
+        public static string FindMinttyPath()
+        {
+            try
+            {
+                string progdir;
+                if (!Environment.Is64BitProcess && Environment.Is64BitOperatingSystem)
+                    progdir = System.Environment.GetEnvironmentVariable("ProgramW6432");
+                else
+                    progdir = System.Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                var strFile = Path.Combine(progdir, "Git\\usr\\bin\\mintty.exe");
+                if (File.Exists(strFile))
+                    return strFile;
+
+                progdir = System.Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                strFile = Path.Combine(progdir, "Git\\usr\\bin\\mintty.exe");
+                if (File.Exists(strFile))
+                    return strFile;
+
+                var paths = System.Environment.GetEnvironmentVariable("PATH").Split(';');
+                foreach (var path in paths)
+                {
+                    strFile = Path.Combine(path, "mintty.exe");
+                    if (File.Exists(strFile))
+                        return strFile;
+                }
+            }
+            catch { }
+
+            return "";
+        }
+
+        public bool FindAndSaveMinttyPath()
+        {
+            string strFound = FindMinttyPath();
+            if (strFound == "")
+                return false;
+
+            MinttyPath = strFound;
+            return true;
+        }
+
         public string MinttyPath
         {
             get { return _config.MinttyPath; }

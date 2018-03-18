@@ -15,22 +15,29 @@ namespace GitConsoleExtension
         private IntPtr _handler;
         protected override HandleRef BuildWindowCore(HandleRef hwndParent)
         {
-            var dte2 = (DTE2) Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof (SDTE));
+            var dte2 = (DTE2)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(SDTE));
             if (!string.IsNullOrEmpty(dte2?.Solution?.FileName))
             {
                 var dir = Path.GetDirectoryName(dte2.Solution.FileName);
                 if (dir != null) Directory.SetCurrentDirectory(dir);
             }
 
-            _process = new Process {StartInfo = new ProcessStartInfo(Config.Instance.MinttyPath,"--nodaemon") };
+            _process = new Process {StartInfo = new ProcessStartInfo(Config.Instance.MinttyPath,"") };
             _process.Start();
             _handler = IntPtr.Zero;
             if (_process.WaitForInputIdle())
                 _handler = _process.MainWindowHandle;
 
+            Win32.PROCESS_DPI_AWARENESS awarenessOwn;
+            var ret1 = Win32.GetProcessDpiAwareness(IntPtr.Zero, out awarenessOwn);
+
+            Win32.PROCESS_DPI_AWARENESS awarenessOther;
+            var ret2 = Win32.GetProcessDpiAwareness(_process.Handle, out awarenessOther);
+
             SetParent(hwndParent.Handle, _handler);
             Win32.SetFocus(_handler);
             var hwnd = new HandleRef(this, _handler);
+
             return hwnd;
         }
 
@@ -43,25 +50,54 @@ namespace GitConsoleExtension
         protected override void DestroyWindowCore(HandleRef hwnd)
         {
             Win32.DestroyWindow(hwnd.Handle);
+
+        }
+
+        public void setFocus()  
+        {
+            Win32.SetFocus(Win32.GetParent(_handler));
+            Win32.SetFocus(_handler);
+            System.Windows.Forms.SendKeys.Send("{TAB}");
+        }
+
+        public void killProcess()
+        {
+            try
+            {
+                _process.Kill();
+            }
+            catch { }
         }
 
         private void SetParent(IntPtr parentHwnd, IntPtr childHwnd)
         {
-            int style = Win32.GetWindowLong(childHwnd, Win32.GWL_STYLE);
-            style = style & ~((int)Win32.WS_CAPTION) & ~((int)Win32.WS_THICKFRAME);
+            var style = (uint)Win32.GetWindowLong(childHwnd, Win32.GWL_STYLE);
+            style = style & ~(Win32.WS_CAPTION) & ~(Win32.WS_THICKFRAME) & ~(Win32.WS_POPUP);
 
             // Removes Caption bar and the sizing border
-            style |= ((int)Win32.WS_CHILD); // Must be a child window to be hosted
+            style |= (Win32.WS_CHILD | Win32.WS_TABSTOP); // Must be a child window to be hosted
 
-            Win32.SetWindowLong(childHwnd, Win32.GWL_STYLE, style);
+            Win32.SetWindowLong(childHwnd, Win32.GWL_STYLE, (int)style);
             Win32.SetParent(childHwnd, parentHwnd);
-
+            int err = Marshal.GetLastWin32Error();
+            var test = Win32.GetParent(childHwnd);
+            
             this.InvalidateVisual();
         }
     }
 
     public static class Win32
     {
+        public enum PROCESS_DPI_AWARENESS
+        {
+            PROCESS_DPI_UNAWARE = 0,
+            PROCESS_SYSTEM_DPI_AWARE = 1,
+            PROCESS_PER_MONITOR_DPI_AWARE = 2
+        }
+
+        [DllImport("Shcore.dll")]
+        public static extern int GetProcessDpiAwareness(IntPtr hprocess, out PROCESS_DPI_AWARENESS value);
+
         [DllImport("user32.dll")]
         public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
@@ -70,6 +106,9 @@ namespace GitConsoleExtension
 
         [DllImport("user32")]
         public static extern IntPtr SetParent(IntPtr hWnd, IntPtr hWndParent);
+
+        [DllImport("user32")]
+        public static extern IntPtr GetParent(IntPtr hWnd);
 
         [DllImport("user32")]
         public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy,
@@ -108,15 +147,18 @@ namespace GitConsoleExtension
         [DllImport("kernel32.dll")]
         public static extern uint GetLastError();
 
+        public const int GWL_STYLE = -16;
+
         public const int SWP_NOZORDER = 0x0004;
         public const int SWP_NOACTIVATE = 0x0010;
-        public const int GWL_STYLE = -16;
-        public const int WS_CAPTION = 0x00C00000;
-        public const int WS_THICKFRAME = 0x00040000;
-        public const int WS_CHILD = 0x40000000;
-        public const int WS_VISIBLE = 0x10000000;
-        public const int WS_EX_TRANSPARENT = 0x00000020;
-        public const int WS_EX_LAYERED = 0x00080000;
+        public const uint WS_CAPTION = 0x00C00000;
+        public const uint WS_TABSTOP = 0x00010000;
+        public const uint WS_THICKFRAME = 0x00040000;
+        public const uint WS_CHILD = 0x40000000;
+        public const uint WS_VISIBLE = 0x10000000;
+        public const uint WS_POPUP = 0x80000000;
+        public const uint WS_EX_TRANSPARENT = 0x00000020;
+        public const uint WS_EX_LAYERED = 0x00080000;
 
         public const int LWA_ALPHA = 0x00000002;
         public const int LWA_COLORKEY = 0x00000001;

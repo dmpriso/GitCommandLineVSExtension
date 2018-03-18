@@ -4,10 +4,12 @@
 // </copyright>
 //------------------------------------------------------------------------------
 
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using System.Runtime.InteropServices;
 
 namespace GitConsoleExtension
 {
@@ -29,7 +31,8 @@ namespace GitConsoleExtension
 
         private void GitHostWindowControl_Loaded(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(Config.Instance.MinttyPath) || !File.Exists(Config.Instance.MinttyPath))
+            if ((string.IsNullOrEmpty(Config.Instance.MinttyPath) || !File.Exists(Config.Instance.MinttyPath))
+                && !Config.Instance.FindAndSaveMinttyPath())
             {
                 InfoStackpanel.Visibility = Visibility.Visible;
             }
@@ -37,6 +40,26 @@ namespace GitConsoleExtension
             {
                 LoadMinttyHost();
             }
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
+
+        public void reloadHost()
+        {
+            if (_gitHost == null)
+                return;
+
+            _gitHost.killProcess();
+            _gitHost.Dispose();
+            _gitHost = new NativeGitConsoleHost();
+            RootGrid.Children.Add(_gitHost);
+        }
+
+
+        public void setFocus()
+        {
+            _gitHost.setFocus();
         }
 
         private void LoadMinttyHost()
